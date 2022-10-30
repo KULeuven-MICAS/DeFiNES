@@ -17,7 +17,7 @@ _logging.basicConfig(level=_logging_level,
                      format=_logging_format)
 
 ####### WHERE THE RESULT FILES WILL BE SAVED TO (USERS CAN CHANGE) #######
-result_saving_path = './result_pickle_files'
+result_saving_path = './result_pickle_files_2'
 ##########################################################################
 
 mainstage = MainStage([
@@ -38,7 +38,6 @@ mainstage = MainStage([
     loma_lpf_limit=6,
     df_tilesize_x=args.tilex,
     df_tilesize_y=args.tiley,
-    # df_max_mls_to_skip=1,
     headname=args.headname,
     general_parameter_iterations={('df_horizontal_caching', 'df_vertical_caching'): ((True, True), (True, False), (True, True))},
     dump_filename_pattern='{result_saving_path}/{headname}_{df_tilesize_x}_{df_tilesize_y}_{df_horizontal_caching}_{df_vertical_caching}.pkl'
