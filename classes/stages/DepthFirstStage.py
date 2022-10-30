@@ -110,162 +110,162 @@ def get_effective_output_to_cache(to_cache, node, make_caching):
     return dim, to_cache, lag
 
 def backpropagate_tilesize(workload: DNNWorkload, tile_x, tile_y,
-                                       use_horizontal_caching=False,
-                                       make_horizontal_caching=False,
-                                       use_vertical_caching=False,
-                                       make_vertical_caching=False)\
-                    -> Tuple[List[LayerNode],
-                             Dict[LayerNode, Tuple[str, int]],
-                             Dict[Tuple[LayerNode, str], Tuple[str, int]],
-                             Dict[LayerNode, Tuple[str, int]],
-                             Dict[Tuple[LayerNode, str], Tuple[str, int]]]:
-                """
-                Backpropagates a tilesize of (OX, OY) = (tile_x, tile_y) at the output nodes to (OX, OY) of earlier
-                layers (nodes in workload).
-                Note: all of this is for a fully-in-regime tile
-                :param workload: the workload to apply this on
-                :param tile_x:
-                :param tile_y:
-                :param use_horizontal_caching: assume horizontal caching is used
-                :param use_vertical_caching: assume vertical caching is used
-                :return: (usefull_nodes, overlap_columns_out, overlap_columns_in, overlap_rows_out, overlap_rows_in).
-                First a list of nodes contributing to the output node currently handled (with index on_i).
-                Then two both dicts containing for every layer how many columns if it's output/input should be cached
-                for reuse.
-                Then the same for rows
-                """
+                           use_horizontal_caching=False,
+                           make_horizontal_caching=False,
+                           use_vertical_caching=False,
+                           make_vertical_caching=False) \
+        -> Tuple[List[LayerNode],
+                 Dict[LayerNode, Tuple[str, int]],
+                 Dict[Tuple[LayerNode, str], Tuple[str, int]],
+                 Dict[LayerNode, Tuple[str, int]],
+                 Dict[Tuple[LayerNode, str], Tuple[str, int]]]:
+    """
+    Backpropagates a tilesize of (OX, OY) = (tile_x, tile_y) at the output nodes to (OX, OY) of earlier
+    layers (nodes in workload).
+    Note: all of this is for a fully-in-regime tile
+    :param workload: the workload to apply this on
+    :param tile_x:
+    :param tile_y:
+    :param use_horizontal_caching: assume horizontal caching is used
+    :param use_vertical_caching: assume vertical caching is used
+    :return: (usefull_nodes, overlap_columns_out, overlap_columns_in, overlap_rows_out, overlap_rows_in).
+    First a list of nodes contributing to the output node currently handled (with index on_i).
+    Then two both dicts containing for every layer how many columns if it's output/input should be cached
+    for reuse.
+    Then the same for rows
+    """
 
 
-                on_i_list = [0]
-                usefull_nodes_output_sizes = defaultdict(return_0_0_list)
-                node_output_sizes_bits = {}
-                columns_to_cache_output = defaultdict(return_empty_dict)  # of output!
-                columns_to_cache_input = defaultdict(return_emtpystr_0_tuple)
-                rows_to_cache_output = defaultdict(return_empty_dict)  # of output!
-                rows_to_cache_input = defaultdict(return_emtpystr_0_tuple)
-
-
-
-
-                for on_i in on_i_list:
-                    on: LayerNode = list(node for node, out_degree in workload.out_degree() if out_degree == 0)[on_i]
-                    if tile_x is not None:
-                        on.loop_dim_size['OX'] = tile_x
-                    if tile_y is not None:
-                        on.loop_dim_size['OY'] = tile_y
-                    usefull_nodes_output_sizes[on] = [on.loop_dim_size['OX'], on.loop_dim_size['OY']]
-                    nodes_to_trace_over = [(on, 'OX', 'OY', 0, 0)]
-
-
-                    # construct ROI of output patch (with usefull nodes)
-                    largest_input_plus_output_size = 0
-                    while len(nodes_to_trace_over) > 0:
-                        n: LayerNode = nodes_to_trace_over.pop(0)
-                        n, df_output_loop_X, df_output_loop_Y, lag_h, lag_v = n
-                        n.extract_layer_info()
-                        output_size = n.operand_size_elem['O'] * n.operand_precision['O_final']
-                        node_output_sizes_bits[n] = output_size
+    on_i_list = [0]
+    usefull_nodes_output_sizes = defaultdict(return_0_0_list)
+    node_output_sizes_bits = {}
+    columns_to_cache_output = defaultdict(return_empty_dict)  # of output!
+    columns_to_cache_input = defaultdict(return_emtpystr_0_tuple)
+    rows_to_cache_output = defaultdict(return_empty_dict)  # of output!
+    rows_to_cache_input = defaultdict(return_emtpystr_0_tuple)
 
 
 
-                        # for input operands
-                        # get input operand source
-                        for I, input_node in n.input_operand_source.items():
-                            input_loops = n.calc_tensor_dims(I, n.loop_dim_size)
 
-                            df_input_loop_X : str
-                            if df_output_loop_X in input_loops:
-                                df_input_loop_X = df_output_loop_X
-                            else:
-                                for l in n.operand_loop_dim[I]['pr']:
-                                    if df_output_loop_X in n.operand_loop_dim[I]['pr'][l]:
-                                        df_input_loop_X = l
-                                        break
-                            df_input_loop_Y : str
-                            if df_output_loop_Y in input_loops:
-                                df_input_loop_Y = df_output_loop_Y
-                            else:
-                                for l in n.operand_loop_dim[I]['pr']:
-                                    if df_output_loop_Y in n.operand_loop_dim[I]['pr'][l]:
-                                        df_input_loop_Y = l
-                                        break
-
-                            # find strides
-                            if df_input_loop_X == df_output_loop_X:
-                                SX = 1
-                            else:
-                                SX = n.pr_scaling_factors[df_input_loop_X][df_output_loop_X.lower()]
-                            if df_input_loop_Y == df_output_loop_Y:
-                                SY = 1
-                            else:
-                                SY = n.pr_scaling_factors[df_input_loop_Y][df_output_loop_Y.lower()]
-
-                            input_overlap_X = max(0,
-                                                  input_loops[df_input_loop_X]
-                                                  - n.loop_dim_size[df_output_loop_X] * SX)
-                            input_overlap_Y = max(0,
-                                                  input_loops[df_input_loop_Y]
-                                                  - n.loop_dim_size[df_output_loop_Y] * SY)
-                            # find lag
-                            newlag_h = SX * lag_h \
-                                          - (input_loops[df_input_loop_X] - n.loop_dim_size[df_output_loop_X] * SX + SX -1)//2 \
-                                          + input_overlap_X
-
-                            newlag_v = SY * lag_v \
-                                          - (input_loops[df_input_loop_Y] - n.loop_dim_size[df_output_loop_Y] * SY + SY -1)//2 \
-                                          + input_overlap_Y
+    for on_i in on_i_list:
+        on: LayerNode = list(node for node, out_degree in workload.out_degree() if out_degree == 0)[on_i]
+        if tile_x is not None:
+            on.loop_dim_size['OX'] = tile_x
+        if tile_y is not None:
+            on.loop_dim_size['OY'] = tile_y
+        usefull_nodes_output_sizes[on] = [on.loop_dim_size['OX'], on.loop_dim_size['OY']]
+        nodes_to_trace_over = [(on, 'OX', 'OY', 0, 0)]
 
 
-                            columns_to_cache_input[(n, I)] = df_input_loop_X, input_overlap_X
-                            rows_to_cache_input[(n, I)] = df_input_loop_Y, input_overlap_Y
-                            if use_horizontal_caching:
-                                input_loops[df_input_loop_X] -= input_overlap_X
-                            if use_vertical_caching:
-                                input_loops[df_input_loop_Y] -= input_overlap_Y
-
-                            IX = input_loops[df_input_loop_X]
-                            IY = input_loops[df_input_loop_Y]
-
-
-                            usefull_nodes_output_sizes[input_node][0] = max(
-                                                                          usefull_nodes_output_sizes[input_node][0],
-                                                                          IX)
-                            usefull_nodes_output_sizes[input_node][1] = max(
-                                                                          usefull_nodes_output_sizes[input_node][1],
-                                                                          IY)
-
-                            input_node.loop_dim_size[n.operand_source_dimension_mapping[I][df_input_loop_X]] = \
-                                usefull_nodes_output_sizes[input_node][0]
-                            input_node.loop_dim_size[n.operand_source_dimension_mapping[I][df_input_loop_Y]] = \
-                                usefull_nodes_output_sizes[input_node][1]
-
-                            columns_to_cache_output[input_node][n] = [
-                                    n.operand_source_dimension_mapping[I][df_input_loop_X],
-                                    input_overlap_X if make_horizontal_caching else 0,
-                                    newlag_h]
-                            newlag_h = get_effective_output_to_cache(columns_to_cache_output, input_node, True)[2]
-
-                            rows_to_cache_output[input_node][n] = [
-                                    n.operand_source_dimension_mapping[I][df_input_loop_Y],
-                                    input_overlap_Y if make_vertical_caching else 0,
-                                    newlag_v]
-                            newlag_v = get_effective_output_to_cache(rows_to_cache_output, input_node, True)[2]
+        # construct ROI of output patch (with usefull nodes)
+        largest_input_plus_output_size = 0
+        while len(nodes_to_trace_over) > 0:
+            n: LayerNode = nodes_to_trace_over.pop(0)
+            n, df_output_loop_X, df_output_loop_Y, lag_h, lag_v = n
+            n.extract_layer_info()
+            output_size = n.operand_size_elem['O'] * n.operand_precision['O_final']
+            node_output_sizes_bits[n] = output_size
 
 
 
-                            if input_node in list(workload.nodes()):  # not true when stack cutting
-                                nodes_to_trace_over.insert(0, (input_node,
-                                                                 n.operand_source_dimension_mapping[I][df_input_loop_X],
-                                                                 n.operand_source_dimension_mapping[I][df_input_loop_Y],
-                                                                 newlag_h,
-                                                                 newlag_v))
+            # for input operands
+            # get input operand source
+            for I, input_node in n.input_operand_source.items():
+                input_loops = n.calc_tensor_dims(I, n.loop_dim_size)
+
+                df_input_loop_X : str
+                if df_output_loop_X in input_loops:
+                    df_input_loop_X = df_output_loop_X
+                else:
+                    for l in n.operand_loop_dim[I]['pr']:
+                        if df_output_loop_X in n.operand_loop_dim[I]['pr'][l]:
+                            df_input_loop_X = l
+                            break
+                df_input_loop_Y : str
+                if df_output_loop_Y in input_loops:
+                    df_input_loop_Y = df_output_loop_Y
+                else:
+                    for l in n.operand_loop_dim[I]['pr']:
+                        if df_output_loop_Y in n.operand_loop_dim[I]['pr'][l]:
+                            df_input_loop_Y = l
+                            break
+
+                # find strides
+                if df_input_loop_X == df_output_loop_X:
+                    SX = 1
+                else:
+                    SX = n.pr_scaling_factors[df_input_loop_X][df_output_loop_X.lower()]
+                if df_input_loop_Y == df_output_loop_Y:
+                    SY = 1
+                else:
+                    SY = n.pr_scaling_factors[df_input_loop_Y][df_output_loop_Y.lower()]
+
+                input_overlap_X = max(0,
+                                      input_loops[df_input_loop_X]
+                                      - n.loop_dim_size[df_output_loop_X] * SX)
+                input_overlap_Y = max(0,
+                                      input_loops[df_input_loop_Y]
+                                      - n.loop_dim_size[df_output_loop_Y] * SY)
+                # find lag
+                newlag_h = SX * lag_h \
+                           - (input_loops[df_input_loop_X] - n.loop_dim_size[df_output_loop_X] * SX + SX -1)//2 \
+                           + input_overlap_X
+
+                newlag_v = SY * lag_v \
+                           - (input_loops[df_input_loop_Y] - n.loop_dim_size[df_output_loop_Y] * SY + SY -1)//2 \
+                           + input_overlap_Y
 
 
-                return list(usefull_nodes_output_sizes.keys()), \
-                       {k: get_effective_output_to_cache(columns_to_cache_output, k, make_horizontal_caching)[:-1] for k in columns_to_cache_output}, \
-                       columns_to_cache_input, \
-                       {k: get_effective_output_to_cache(rows_to_cache_output, k, make_vertical_caching)[:-1] for k in rows_to_cache_output}, \
-                       rows_to_cache_input
+                columns_to_cache_input[(n, I)] = df_input_loop_X, input_overlap_X
+                rows_to_cache_input[(n, I)] = df_input_loop_Y, input_overlap_Y
+                if use_horizontal_caching:
+                    input_loops[df_input_loop_X] -= input_overlap_X
+                if use_vertical_caching:
+                    input_loops[df_input_loop_Y] -= input_overlap_Y
+
+                IX = input_loops[df_input_loop_X]
+                IY = input_loops[df_input_loop_Y]
+
+
+                usefull_nodes_output_sizes[input_node][0] = max(
+                    usefull_nodes_output_sizes[input_node][0],
+                    IX)
+                usefull_nodes_output_sizes[input_node][1] = max(
+                    usefull_nodes_output_sizes[input_node][1],
+                    IY)
+
+                input_node.loop_dim_size[n.operand_source_dimension_mapping[I][df_input_loop_X]] = \
+                    usefull_nodes_output_sizes[input_node][0]
+                input_node.loop_dim_size[n.operand_source_dimension_mapping[I][df_input_loop_Y]] = \
+                    usefull_nodes_output_sizes[input_node][1]
+
+                columns_to_cache_output[input_node][n] = [
+                    n.operand_source_dimension_mapping[I][df_input_loop_X],
+                    input_overlap_X if make_horizontal_caching else 0,
+                    newlag_h]
+                newlag_h = get_effective_output_to_cache(columns_to_cache_output, input_node, True)[2]
+
+                rows_to_cache_output[input_node][n] = [
+                    n.operand_source_dimension_mapping[I][df_input_loop_Y],
+                    input_overlap_Y if make_vertical_caching else 0,
+                    newlag_v]
+                newlag_v = get_effective_output_to_cache(rows_to_cache_output, input_node, True)[2]
+
+
+
+                if input_node in list(workload.nodes()):  # not true when stack cutting
+                    nodes_to_trace_over.insert(0, (input_node,
+                                                   n.operand_source_dimension_mapping[I][df_input_loop_X],
+                                                   n.operand_source_dimension_mapping[I][df_input_loop_Y],
+                                                   newlag_h,
+                                                   newlag_v))
+
+
+    return list(usefull_nodes_output_sizes.keys()), \
+           {k: get_effective_output_to_cache(columns_to_cache_output, k, make_horizontal_caching)[:-1] for k in columns_to_cache_output}, \
+           columns_to_cache_input, \
+           {k: get_effective_output_to_cache(rows_to_cache_output, k, make_vertical_caching)[:-1] for k in rows_to_cache_output}, \
+           rows_to_cache_input
 
 
 class DepthFirstStage(Stage):
@@ -280,6 +280,7 @@ class DepthFirstStage(Stage):
                  df_tilesize_x:int, df_tilesize_y:int,
                  df_horizontal_caching:bool, df_vertical_caching:bool,
                  df_stack_cuts:list,
+                 df_max_mls_to_skip:int=None,
                  **params):
         """
         Initialize the pipeline by initializing the workload and spatial mapping converison loma pipelines.
@@ -293,6 +294,7 @@ class DepthFirstStage(Stage):
         self.workload = workload
         self.accelerator = accelerator
         self.df_stack_cuts = df_stack_cuts
+        self.df_max_mls_to_skip = df_max_mls_to_skip
 
     def __str__(self):
         return str(type(self).__name__)
@@ -481,9 +483,9 @@ class DepthFirstStage(Stage):
                 best_cme_per_layer_tile = {}
                 usefull_workload_tile = pickle_deepcopy(usefull_workload)
                 usefull_nodes, _, _, _, _= backpropagate_tilesize(usefull_workload_tile, tile_x, tile_y,
-                                                             use_horizontal_caching=use_horizontal_cache_ml is not None,
-                                                             make_horizontal_caching=make_horizontal_cache_ml is not None,
-                                                             use_vertical_caching=use_vertical_cache_ml is not None)
+                                                                  use_horizontal_caching=use_horizontal_cache_ml is not None,
+                                                                  make_horizontal_caching=make_horizontal_cache_ml is not None,
+                                                                  use_vertical_caching=use_vertical_cache_ml is not None)
 
 
                 mh = self.accelerator.get_core(next(n for n in nx.topological_sort(usefull_workload_tile) if hasattr(n, 'core_allocation')).core_allocation).memory_hierarchy
@@ -494,6 +496,8 @@ class DepthFirstStage(Stage):
                         memories_to_take_for_W.append(ml)
                         if ml == w_ml:
                             break
+
+
 
                 # lookup dictionary to know where a previous layer stored its output
                 # to know where to find the input at a current layer
@@ -515,6 +519,29 @@ class DepthFirstStage(Stage):
                         is_substack_output = usefull_workload_tile.out_degree(layer) == 0
                         to_copy = to_copy_orig[:]
                         layer = pickle_deepcopy(layer)
+
+
+
+                        #translate self.df_max_mls_to_skip to minimum memory levels
+                        o_mem_mls = mh.get_memory_levels('O')
+                        if self.df_max_mls_to_skip is None:
+                            df_max_mls_to_skip = 1000000000
+                        else:
+                            df_max_mls_to_skip = self.df_max_mls_to_skip
+
+                        skipped = 0
+                        for ml in o_mem_mls[::-1]:
+                            if 'O' not in ml.operands:
+                                break  # we require a shared ml, so the previously set one is the one to use
+                            minimum_ml_o = ml
+                            if skipped == df_max_mls_to_skip:
+                                break  # this is the one to use
+                            # more skipping is allowed
+                            skipped += 1
+
+
+
+
 
                         if is_substack_input:  # until the one decided for this substack
                             memories_to_take_for_I = [None]
@@ -545,10 +572,14 @@ class DepthFirstStage(Stage):
                             # - the output
                             # - the input, if this ml is also the highest one to be included for inputs
                             #  ... and is not unrolled
+                            # and the minimum or above as set by maximum memory levels to skip
+                            hit_minimum = False
                             memories_to_take_for_O = []
                             for i, ml in enumerate(mh.get_memory_levels(layer.memory_operand_links['O'])):
+                                if ml == minimum_ml_o:
+                                    hit_minimum = True
                                 memories_to_take_for_O.append(ml)
-                                if ml.memory_instance.size >= layer_output_size + \
+                                if hit_minimum and ml.memory_instance.size >= layer_output_size + \
                                         (input_size if memories_to_take_for_I[-1] == ml else 0) and ml.unroll_count == 1:
                                     break
 
@@ -571,7 +602,7 @@ class DepthFirstStage(Stage):
                             # output -> input
                             for I in layer.input_operand_source:
                                 stored_as_output = memories_to_take_for_I_lookup_as_from_O[layer.input_operand_source[I].id]
-                                if memories_to_take_for_I[-1] != stored_as_output[0] and not isinstance(layer.input_operand_source[I], InputLayerNode)\
+                                if memories_to_take_for_I[-1] != stored_as_output[0] and not isinstance(layer.input_operand_source[I], InputLayerNode) \
                                         or stored_as_output[0] not in memories_to_take_for_I and isinstance(layer.input_operand_source[I], InputLayerNode):
                                     # the inputs where not stored where they need to be stored now -> copy them
                                     to_copy.append((('O', I), stored_as_output[0], memories_to_take_for_I[-1], stored_as_output[1]))
@@ -605,7 +636,7 @@ class DepthFirstStage(Stage):
                                     if I not in layer.constant_operands:
                                         column_dim = vertical_read_rows[(layer.id, I)][2]
                                         nb_columns = layer.loop_dim_size[column_dim] if column_dim in layer.loop_dim_size \
-                                                        else layer.calc_tensor_dims(I, layer.loop_dim_size)[column_dim]
+                                            else layer.calc_tensor_dims(I, layer.loop_dim_size)[column_dim]
 
                                         if use_horizontal_cache_ml is not None:
                                             # this part overlaps and is already loaded because of horizontal reuse caching
@@ -646,14 +677,14 @@ class DepthFirstStage(Stage):
                                     while memories_to_take_for_I[-1] not in memhier.get_operator_top_level(layer.memory_operand_links[I])[0]:
 
                                         removed, _ = memhier.remove_operator_top_level(layer.memory_operand_links[I])
-                                        accelerator_mem_level_removed.get_core(layer.core_allocation).\
+                                        accelerator_mem_level_removed.get_core(layer.core_allocation). \
                                             recalculate_memory_hierarchy_information()
 
                         if not is_substack_output:
                             while memories_to_take_for_O[-1] not in memhier.get_operator_top_level(layer.memory_operand_links['O'])[0]:
 
                                 removed, _ = memhier.remove_operator_top_level(layer.memory_operand_links['O'])
-                                accelerator_mem_level_removed.get_core(layer.core_allocation).\
+                                accelerator_mem_level_removed.get_core(layer.core_allocation). \
                                     recalculate_memory_hierarchy_information()
 
 
@@ -687,7 +718,7 @@ class DepthFirstStage(Stage):
                                 if memories_to_take_for_W:
                                     while memories_to_take_for_W[-1] not in memhier.get_operator_top_level(layer.memory_operand_links[layer.constant_operands[0]])[0]:
                                         removed, _ = memhier.remove_operator_top_level(layer.memory_operand_links['W'])
-                                        accelerator_mem_level_removed.get_core(layer.core_allocation).\
+                                        accelerator_mem_level_removed.get_core(layer.core_allocation). \
                                             recalculate_memory_hierarchy_information()
                                 else:
                                     # LINYAN: there are no weights => okay to leave memory hierarchy of non-existent weight operand?
@@ -711,8 +742,8 @@ class DepthFirstStage(Stage):
                             source_memlevel = self.accelerator.get_core(layer.core_allocation).memory_hierarchy.get_memorylevel_with_id(tc[1].get_id())
 
                             if tc[0][1] == 'CO':
-                                dest_memlevel = self.accelerator.get_core(layer.core_allocation)\
-                                                    .memory_hierarchy.get_memorylevel_with_id(tc[2].get_id())
+                                dest_memlevel = self.accelerator.get_core(layer.core_allocation) \
+                                    .memory_hierarchy.get_memorylevel_with_id(tc[2].get_id())
                             else:
                                 dest_memlevel = memhier.get_memorylevel_with_id(tc[2].get_id())
 
@@ -768,7 +799,7 @@ class DepthFirstStage(Stage):
                         # as the ml for caching for vertical reuse is at least as high as the one for horizontal reuse
                         subtract_vertical_from_horizontal = None # amount to not copy for horizontal, as its already copied for vertical cache
                         if make_vertical_cache_ml is not None and make_vertical_cache_ml != memories_to_take_for_O[-1] \
-                            and layer.id in vertical_write_rows:
+                                and layer.id in vertical_write_rows:
                             amount_bits_factors = {k: layer.loop_dim_size[k] for k in layer.operand_loop_dim['O']['r']}
                             amount_bits_factors[vertical_write_rows[layer.id][0]] = vertical_write_rows[layer.id][1]
                             amount_bits_factors['precision'] = layer.operand_precision['O_final']
@@ -813,14 +844,14 @@ class DepthFirstStage(Stage):
                                                first_y:bool,
                                                horizontal_caching:bool,  # unused, oops
                                                vertical_caching:bool,  # unused oops
-                                               )\
-                                                    -> Tuple[MemoryLevel,
-                                                             MemoryLevel,
-                                                             Dict[LayerNode, int],
-                                                             Dict[LayerNode, int],
-                                                             Dict[LayerNode, int],
-                                                             Dict[LayerNode, int],
-                                                             MemoryLevel]:
+                                               ) \
+                    -> Tuple[MemoryLevel,
+                             MemoryLevel,
+                             Dict[LayerNode, int],
+                             Dict[LayerNode, int],
+                             Dict[LayerNode, int],
+                             Dict[LayerNode, int],
+                             MemoryLevel]:
                 # cache results for runtime optimization
                 tilesize_to_determine_cachesize = (tile_x, tile_y, first_x, first_y, horizontal_caching, vertical_caching)
                 if tilesize_to_determine_cachesize in determine_horizontal_caching_ml_for_tilesize_cache:
@@ -839,12 +870,12 @@ class DepthFirstStage(Stage):
                 to_cache_horizontally_in, \
                 to_cache_vertically_out, \
                 to_cache_vertically_in = backpropagate_tilesize(
-                                               workload_copy,
-                                               tile_x, tile_y, #tilesize
-                                               not first_x,  # use horizontal caching
-                                               True,    # make horizontal caching
-                                               not first_y,    # use vertical caching
-                                               True)    # make vertical caching
+                    workload_copy,
+                    tile_x, tile_y, #tilesize
+                    not first_x,  # use horizontal caching
+                    True,    # make horizontal caching
+                    not first_y,    # use vertical caching
+                    True)    # make vertical caching
 
                 workload_copy_for_largest_alive_size = pickle_deepcopy(usefull_workload)
                 _, \
@@ -852,12 +883,12 @@ class DepthFirstStage(Stage):
                 _, \
                 _, \
                 _ = backpropagate_tilesize(
-                                               workload_copy_for_largest_alive_size,
-                                               tile_x, tile_y, #tilesize
-                                               not first_x and self.horizontal_caching,  # use horizontal caching
-                                               True,    # make horizontal caching
-                                               not first_y and self.vertical_caching,    # use vertical caching
-                                               True)    # make vertical caching
+                    workload_copy_for_largest_alive_size,
+                    tile_x, tile_y, #tilesize
+                    not first_x and self.horizontal_caching,  # use horizontal caching
+                    True,    # make horizontal caching
+                    not first_y and self.vertical_caching,    # use vertical caching
+                    True)    # make vertical caching
 
                 largest_input_plus_output_size = get_largest_alive_size(workload_copy_for_largest_alive_size)
 
@@ -906,21 +937,47 @@ class DepthFirstStage(Stage):
                         elems = n.operand_size_elem[I] // h_tilesize * h_size // v_tilesize * v_size
                         to_cache_overlapped_bits_in[(n, I)] = elems * n.operand_precision[I]
 
+
+
+
                 # if first tile in a row, we don't have all horizontal caches at once (except at the end)
                 # So we figger out at every point in the network what is the number of features alive + all caches
                 # created up until that point
                 peak_f_mem_size = get_largest_alive_size(workload_copy_for_largest_alive_size)
                 i_mem_op = next(n.memory_operand_links[I] for n in usefull_nodes for I in n.memory_operand_links if I not in n.constant_operands and n.memory_operand_links[I]!= 'O')
 
+                #translate self.df_max_mls_to_skip to minimum memory levels
+                i_mem_mls = mh.get_memory_levels(i_mem_op)
+                if self.df_max_mls_to_skip is None:
+                    df_max_mls_to_skip = 1000000000
+                else:
+                    df_max_mls_to_skip = self.df_max_mls_to_skip
+
+                skipped = 0
+                for ml in i_mem_mls[::-1]:
+                    if 'O' not in ml.operands:
+                        break  # we require a shared ml, so the previously set one is the one to use
+                    minimum_ml = ml
+                    if skipped == df_max_mls_to_skip:
+                        break  # this is the one to use
+                    # more skipping is allowed
+                    skipped += 1
+
+
                 o_mem_op = next(n.memory_operand_links['O'] for n in usefull_nodes if 'O' in n.memory_operand_links)
                 # get lowest memory that fits largest fm, to reserve space that can not be used for weights
                 # and is also not unrolled
                 memories_to_reserve_for_IO = []
+                hit_minimum_ml = False
                 for i, ml in enumerate(mh.get_memory_levels(o_mem_op)):
                     memories_to_reserve_for_IO.append(ml)
-                    if i_mem_op in ml.operands and ml.memory_instance.size >= largest_input_plus_output_size and ml.unroll_count == 1:
+                    if ml == minimum_ml:
+                        hit_minimum_ml = True
+                    if hit_minimum_ml and ml.memory_instance.size >= largest_input_plus_output_size and ml.unroll_count == 1 and hit_minimum_ml:
+                        assert i_mem_op in ml.operands  # should be true because of minimum memory level
                         break
                 io_mem_level = memories_to_reserve_for_IO[-1]
+
 
 
                 if horizontal_caching:
@@ -937,8 +994,12 @@ class DepthFirstStage(Stage):
                     #  - fits horizontal at the same time as largest amount of alive features (see if statement above=> peak_mem size)
                     #  - is shared between inputs and outputs
                     #  - is not unrolled
+                    hit_minimum_ml = False
                     for i, ml in enumerate(memory_hierarchy.get_memory_levels('O')):
-                        if ml.memory_instance.size >= peak_f_mem_size and i_mem_op in ml.operands and ml.unroll_count == 1:
+                        if ml == minimum_ml:
+                            hit_minimum_ml = True
+                        if hit_minimum_ml and ml.memory_instance.size >= peak_f_mem_size and i_mem_op in ml.operands and ml.unroll_count == 1:
+                            assert i_mem_op in ml.operands  # should be true because of minimum memory level
                             horizontal_caching_ml = ml
                             logger.info(f"Caching for horizontal reuse in memorylevel {ml} for tile {tile_x}x{tile_y}" +
                                         (" (firstx)" if first_x else "") + (" (firsty)" if first_y else ""))
@@ -952,11 +1013,15 @@ class DepthFirstStage(Stage):
                         #  - is not unrolled
                         vertical_caching_ml : MemoryLevel
                         peak_f_mem_size = sum(to_cache_vertically_bits_in.values()) + peak_f_mem_size
+                        hit_minimum_ml = False
                         for i, ml in enumerate(memory_hierarchy.get_memory_levels(o_mem_op)):
+                            if ml == minimum_ml:
+                                hit_minimum_ml = True
                             size_to_fit = peak_f_mem_size
                             if ml == horizontal_caching_ml:
                                 size_to_fit -= sum(to_cache_overlapped_bits_in.values())  # only subtracting this if they are the same memorylevel, Otherwise we assume stored double
-                            if ml.memory_instance.size >= size_to_fit and i_mem_op in ml.operands and ml.unroll_count ==  1:
+                            if hit_minimum_ml and ml.memory_instance.size >= size_to_fit  and ml.unroll_count ==  1:
+                                assert i_mem_op in ml.operands  # should be true because of minimum memory level
                                 vertical_caching_ml = ml
                                 logger.info(f"Caching for vertical reuse in memorylevel {ml}")
                                 break
@@ -965,6 +1030,7 @@ class DepthFirstStage(Stage):
                 else:
                     horizontal_caching_ml = None
                     vertical_caching_ml = None
+
 
                 # weights have lowest priority, so lowest memorylevel that fits
                 # - all weights
@@ -1003,17 +1069,17 @@ class DepthFirstStage(Stage):
                     columns_to_write = to_cache_horizontally_out
                 else:
                     columns_to_write = {l: (to_cache_horizontally_out[l][0],
-                                             min(
-                                                 to_cache_horizontally_out[l][1],
-                                                  l.loop_dim_size[to_cache_horizontally_out[l][0]]
-                                             )) for l in to_cache_horizontally_out}
+                                            min(
+                                                to_cache_horizontally_out[l][1],
+                                                l.loop_dim_size[to_cache_horizontally_out[l][0]]
+                                            )) for l in to_cache_horizontally_out}
                 if first_y:
                     rows_to_write = to_cache_vertically_out
                 else:
                     rows_to_write = {l : (to_cache_vertically_out[l][0],
                                           min(to_cache_vertically_out[l][1],
                                               l.loop_dim_size[to_cache_vertically_out[l][0]]))
-                                         for l in to_cache_vertically_out}
+                                     for l in to_cache_vertically_out}
 
                 columns_to_read = defaultdict(return_0) if first_x else to_cache_horizontally_in
                 rows_to_read = defaultdict(return_0) if first_y else to_cache_vertically_in
@@ -1067,12 +1133,12 @@ class DepthFirstStage(Stage):
                     this_tile_x = self.tilesize_x if x0 != 0 else leftover_tilesize_x
                     assert x0 + this_tile_x <= total_OX
 
-                    horizontal_caching_ml,\
-                    vertical_cache_ml,\
-                    horizontal_cache_write_columns,\
-                    horizontal_cache_read_columns,\
-                    vertical_write_rows,\
-                    vertical_read_rows,\
+                    horizontal_caching_ml, \
+                    vertical_cache_ml, \
+                    horizontal_cache_write_columns, \
+                    horizontal_cache_read_columns, \
+                    vertical_write_rows, \
+                    vertical_read_rows, \
                     w_ml                          = determine_caching_for_tilesize(this_tile_x, this_tile_y,
                                                                                    x0 == 0, y0 == 0,
                                                                                    self.horizontal_caching,
@@ -1082,12 +1148,12 @@ class DepthFirstStage(Stage):
                             horizontal_caching_info[(x0, y0)] = [None, defaultdict(return_emtpystr_0_list), horizontal_cache_read_columns]
                         elif x0 == 0:
                             horizontal_caching_info[(x0, y0)] = [horizontal_caching_ml, \
-                                                              horizontal_cache_write_columns,\
-                                                              horizontal_cache_read_columns]
+                                                                 horizontal_cache_write_columns, \
+                                                                 horizontal_cache_read_columns]
                         else:
                             horizontal_caching_info[(x0, y0)] = [horizontal_caching_ml, \
-                                                              horizontal_cache_write_columns,\
-                                                              horizontal_cache_read_columns]
+                                                                 horizontal_cache_write_columns, \
+                                                                 horizontal_cache_read_columns]
                         if x0 != 0:
                             # If caching ml of this tile is higher than for previous tile, make sure previous tile
                             # makes to this memory level
@@ -1187,19 +1253,19 @@ class DepthFirstStage(Stage):
 
                     #Actually run a tile here:
                     energy_of_this_tile = \
-                                    run_for_tilesize(this_tile_x,
-                                                     this_tile_y,
-                                                     weights_from_top,
-                                                     make_horizontal_cache_ml,
-                                                     use_horizontal_cache_ml,
-                                                     horizontal_cache_write_columns,
-                                                     horizontal_cache_read_columns,
-                                                     make_vertical_cache_ml,  # make vertical cache ml
-                                                     use_vertical_cache_ml,  # make vertical cache ml
-                                                     vertical_write_rows,  # write rows of cache if not last line of tiles
-                                                     vertical_read_rows,
-                                                     highest_w_ml,
-                                                     x0, y0)
+                        run_for_tilesize(this_tile_x,
+                                         this_tile_y,
+                                         weights_from_top,
+                                         make_horizontal_cache_ml,
+                                         use_horizontal_cache_ml,
+                                         horizontal_cache_write_columns,
+                                         horizontal_cache_read_columns,
+                                         make_vertical_cache_ml,  # make vertical cache ml
+                                         use_vertical_cache_ml,  # make vertical cache ml
+                                         vertical_write_rows,  # write rows of cache if not last line of tiles
+                                         vertical_read_rows,
+                                         highest_w_ml,
+                                         x0, y0)
                     # see if result was already seen
                     # If so, just increase its multiplier (runtime optimization)
                     for k, v in energy_of_this_tile.items():
