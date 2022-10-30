@@ -768,7 +768,7 @@ def plot_Fig10_activation_data_size_visualization(result_saving_path, design_to_
 
 
 if __name__ == '__main__':
-    from main_cs1 import result_saving_path
+    from main_artifact import result_saving_path
     data_to_plot = data_collect(result_saving_path)
     plot_Fig13_MAC_Op_count(data_to_plot)
     plot_Fig14_a_mem_access_breakdown(data_to_plot)

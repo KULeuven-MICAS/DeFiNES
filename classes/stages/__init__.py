@@ -30,7 +30,6 @@ Parameter consumers: these parameters are no longer provided to substages after 
  - df_tilesize_x: DepthFirstStage
  - df_tilesize_y: DepthFirstStage
  - df_vertical_caching: DepthFirstStage
- - df_max_mls_to_skip: DepthFirstStage
  - dump_filename_pattern: DumpStage
  - general_parameter_iterations: GeneralParameterIteratorStage
  - multiprocessing_callback: MultiProcessingSpawnStage

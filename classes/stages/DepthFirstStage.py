@@ -15,7 +15,7 @@ from classes.workload.layer_node import LayerNode, InputLayerNode
 from utils import pickle_deepcopy
 from classes.stages.WorkloadStage import WorkloadStage
 import classes.io.input_config as inputs
-from  math import prod
+from math import prod
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -280,7 +280,6 @@ class DepthFirstStage(Stage):
                  df_tilesize_x:int, df_tilesize_y:int,
                  df_horizontal_caching:bool, df_vertical_caching:bool,
                  df_stack_cuts:list,
-                 df_max_mls_to_skip:int=None,
                  **params):
         """
         Initialize the pipeline by initializing the workload and spatial mapping converison loma pipelines.
@@ -294,7 +293,6 @@ class DepthFirstStage(Stage):
         self.workload = workload
         self.accelerator = accelerator
         self.df_stack_cuts = df_stack_cuts
-        self.df_max_mls_to_skip = df_max_mls_to_skip
 
     def __str__(self):
         return str(type(self).__name__)
@@ -497,8 +495,6 @@ class DepthFirstStage(Stage):
                         if ml == w_ml:
                             break
 
-
-
                 # lookup dictionary to know where a previous layer stored its output
                 # to know where to find the input at a current layer
                 memories_to_take_for_I_lookup_as_from_O = {}
@@ -519,29 +515,6 @@ class DepthFirstStage(Stage):
                         is_substack_output = usefull_workload_tile.out_degree(layer) == 0
                         to_copy = to_copy_orig[:]
                         layer = pickle_deepcopy(layer)
-
-
-
-                        #translate self.df_max_mls_to_skip to minimum memory levels
-                        o_mem_mls = mh.get_memory_levels('O')
-                        if self.df_max_mls_to_skip is None:
-                            df_max_mls_to_skip = 1000000000
-                        else:
-                            df_max_mls_to_skip = self.df_max_mls_to_skip
-
-                        skipped = 0
-                        for ml in o_mem_mls[::-1]:
-                            if 'O' not in ml.operands:
-                                break  # we require a shared ml, so the previously set one is the one to use
-                            minimum_ml_o = ml
-                            if skipped == df_max_mls_to_skip:
-                                break  # this is the one to use
-                            # more skipping is allowed
-                            skipped += 1
-
-
-
-
 
                         if is_substack_input:  # until the one decided for this substack
                             memories_to_take_for_I = [None]
@@ -572,14 +545,10 @@ class DepthFirstStage(Stage):
                             # - the output
                             # - the input, if this ml is also the highest one to be included for inputs
                             #  ... and is not unrolled
-                            # and the minimum or above as set by maximum memory levels to skip
-                            hit_minimum = False
                             memories_to_take_for_O = []
                             for i, ml in enumerate(mh.get_memory_levels(layer.memory_operand_links['O'])):
-                                if ml == minimum_ml_o:
-                                    hit_minimum = True
                                 memories_to_take_for_O.append(ml)
-                                if hit_minimum and ml.memory_instance.size >= layer_output_size + \
+                                if ml.memory_instance.size >= layer_output_size + \
                                         (input_size if memories_to_take_for_I[-1] == ml else 0) and ml.unroll_count == 1:
                                     break
 
@@ -937,47 +906,21 @@ class DepthFirstStage(Stage):
                         elems = n.operand_size_elem[I] // h_tilesize * h_size // v_tilesize * v_size
                         to_cache_overlapped_bits_in[(n, I)] = elems * n.operand_precision[I]
 
-
-
-
                 # if first tile in a row, we don't have all horizontal caches at once (except at the end)
                 # So we figger out at every point in the network what is the number of features alive + all caches
                 # created up until that point
                 peak_f_mem_size = get_largest_alive_size(workload_copy_for_largest_alive_size)
                 i_mem_op = next(n.memory_operand_links[I] for n in usefull_nodes for I in n.memory_operand_links if I not in n.constant_operands and n.memory_operand_links[I]!= 'O')
 
-                #translate self.df_max_mls_to_skip to minimum memory levels
-                i_mem_mls = mh.get_memory_levels(i_mem_op)
-                if self.df_max_mls_to_skip is None:
-                    df_max_mls_to_skip = 1000000000
-                else:
-                    df_max_mls_to_skip = self.df_max_mls_to_skip
-
-                skipped = 0
-                for ml in i_mem_mls[::-1]:
-                    if 'O' not in ml.operands:
-                        break  # we require a shared ml, so the previously set one is the one to use
-                    minimum_ml = ml
-                    if skipped == df_max_mls_to_skip:
-                        break  # this is the one to use
-                    # more skipping is allowed
-                    skipped += 1
-
-
                 o_mem_op = next(n.memory_operand_links['O'] for n in usefull_nodes if 'O' in n.memory_operand_links)
                 # get lowest memory that fits largest fm, to reserve space that can not be used for weights
                 # and is also not unrolled
                 memories_to_reserve_for_IO = []
-                hit_minimum_ml = False
                 for i, ml in enumerate(mh.get_memory_levels(o_mem_op)):
                     memories_to_reserve_for_IO.append(ml)
-                    if ml == minimum_ml:
-                        hit_minimum_ml = True
-                    if hit_minimum_ml and ml.memory_instance.size >= largest_input_plus_output_size and ml.unroll_count == 1 and hit_minimum_ml:
-                        assert i_mem_op in ml.operands  # should be true because of minimum memory level
+                    if i_mem_op in ml.operands and ml.memory_instance.size >= largest_input_plus_output_size and ml.unroll_count == 1:
                         break
                 io_mem_level = memories_to_reserve_for_IO[-1]
-
 
 
                 if horizontal_caching:
@@ -994,12 +937,8 @@ class DepthFirstStage(Stage):
                     #  - fits horizontal at the same time as largest amount of alive features (see if statement above=> peak_mem size)
                     #  - is shared between inputs and outputs
                     #  - is not unrolled
-                    hit_minimum_ml = False
                     for i, ml in enumerate(memory_hierarchy.get_memory_levels('O')):
-                        if ml == minimum_ml:
-                            hit_minimum_ml = True
-                        if hit_minimum_ml and ml.memory_instance.size >= peak_f_mem_size and i_mem_op in ml.operands and ml.unroll_count == 1:
-                            assert i_mem_op in ml.operands  # should be true because of minimum memory level
+                        if ml.memory_instance.size >= peak_f_mem_size and i_mem_op in ml.operands and ml.unroll_count == 1:
                             horizontal_caching_ml = ml
                             logger.info(f"Caching for horizontal reuse in memorylevel {ml} for tile {tile_x}x{tile_y}" +
                                         (" (firstx)" if first_x else "") + (" (firsty)" if first_y else ""))
@@ -1013,15 +952,11 @@ class DepthFirstStage(Stage):
                         #  - is not unrolled
                         vertical_caching_ml : MemoryLevel
                         peak_f_mem_size = sum(to_cache_vertically_bits_in.values()) + peak_f_mem_size
-                        hit_minimum_ml = False
                         for i, ml in enumerate(memory_hierarchy.get_memory_levels(o_mem_op)):
-                            if ml == minimum_ml:
-                                hit_minimum_ml = True
                             size_to_fit = peak_f_mem_size
                             if ml == horizontal_caching_ml:
                                 size_to_fit -= sum(to_cache_overlapped_bits_in.values())  # only subtracting this if they are the same memorylevel, Otherwise we assume stored double
-                            if hit_minimum_ml and ml.memory_instance.size >= size_to_fit  and ml.unroll_count ==  1:
-                                assert i_mem_op in ml.operands  # should be true because of minimum memory level
+                            if ml.memory_instance.size >= size_to_fit and i_mem_op in ml.operands and ml.unroll_count ==  1:
                                 vertical_caching_ml = ml
                                 logger.info(f"Caching for vertical reuse in memorylevel {ml}")
                                 break
@@ -1030,7 +965,6 @@ class DepthFirstStage(Stage):
                 else:
                     horizontal_caching_ml = None
                     vertical_caching_ml = None
-
 
                 # weights have lowest priority, so lowest memorylevel that fits
                 # - all weights

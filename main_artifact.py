@@ -1,7 +1,7 @@
 from classes.stages import *
 import numpy as np
 import logging as _logging
-from plot_cs1 import plot_Fig12_total_en_and_la_heatmap
+from plot_artifact import plot_Fig12_total_en_and_la_heatmap
 
 _logging_level = _logging.INFO
 _logging_format = '%(asctime)s - %(name)s.%(funcName)s +%(lineno)s - %(levelname)s - %(message)s'
@@ -17,6 +17,9 @@ df_x_tilesizes = (1, 4, 16, 60, 240, 960)
 df_y_tilesizes = (1, 4, 18, 72, 270, 540)
 plotinfo = np.empty((3, 2, 6, 6))  # 3 rows for different overlap-storing modes, 2 columns for energy and latency, and a 6x6 y by x tilesize grid
 
+df_x_tilesizes = (1, )
+df_y_tilesizes = (1, )
+plotinfo = np.random.rand(3, 2, 6, 6)  # 3 rows for different overlap-storing modes, 2 columns for energy and latency, and a 6x6 y by x tilesize grid
 
 class CS1_Result_Collector_Stage(Stage):
     """
