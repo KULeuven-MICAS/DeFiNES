@@ -13,27 +13,28 @@ scheduling possibilities.
 
 ## Environment
 
-We recommend setting up an anaconda environment.
+We recommend setting up an [Anaconda](https://docs.anaconda.com/anaconda/install/index.html) environment. 
 
-Use the terminal or an Anaconda Prompt for the following steps:
+Use a terminal or an Anaconda Prompt for the following steps:
 
-Create the environment from the environment.yml file:
+1) Create the conda environment from the environment.yml file:
 
-    conda env create -f environment.yml
+    > conda env create -f environment.yml
 
-The first line of the yml file sets the new environment's name (DeFiNESenv).
+    **The first line of the yml file sets the new environment's name: DeFiNESenv.*
 
-Then, activate the new environment:
+
+2) Activate the new environment:
     
-    conda activate DeFiNESenv
+    > conda activate DeFiNESenv
 
 
 ## Run
 
 Firstly, 
 
-    python main_artifact.py
+> python main_artifact.py
 
 Secondly,
 
-    python plot_artifact.py
+> python plot_artifact.py
