@@ -26,3 +26,14 @@ The first line of the yml file sets the new environment's name (DeFiNESenv).
 Then, activate the new environment:
     
     conda activate DeFiNESenv
+
+
+## Run
+
+Firstly, 
+
+    python main_artifact.py
+
+Secondly,
+
+    python plot_artifact.py
