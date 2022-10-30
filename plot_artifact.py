@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
-from plot_cs1_helper_funcs import heatmap, annotate_heatmap, data_collect
+from plot_helper_funcs import heatmap, annotate_heatmap, data_collect
 
 
 def plot_Fig12_total_en_and_la_heatmap(plotinfo):
