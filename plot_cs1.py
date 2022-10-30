@@ -5,6 +5,8 @@ from plot_cs1_helper_funcs import heatmap, annotate_heatmap, data_collect
 
 
 def plot_Fig12_total_en_and_la_heatmap(plotinfo):
+    import os
+
     # plotinfo: a numpy array of 3 rows for different overlap-storing modes, 2 columns for energy and latency, and a 6x6 y by x tilesize grid
     fig, ax = plt.subplots(3, 2, figsize=(10, 8))
     x_label = [1, 4, 16, 60, 240, 960]
@@ -63,6 +65,8 @@ def plot_Fig12_total_en_and_la_heatmap(plotinfo):
 
     fig.suptitle('Fig12 Overall Energy and Latency Comparison', fontsize=14)
     fig.tight_layout()
+    if not os.path.isdir('./result_plot'):
+        os.makedirs('./result_plot')
     plt.savefig('./result_plot/Fig12.pdf')
     plt.show()
 

@@ -16,9 +16,9 @@ _logging_format = '%(asctime)s - %(name)s.%(funcName)s +%(lineno)s - %(levelname
 _logging.basicConfig(level=_logging_level,
                      format=_logging_format)
 
-########### USERS NEED TO CHANGE THE BELOW PATH TO WHERE THE RESULT FILES TO BE SAVED ###########
-result_saving_path = '/esat/prometheus1/users/lmei/zigzag-v2/results_artifact/'
-#################################################################################################
+####### WHERE THE RESULT FILES WILL BE SAVED TO (USERS CAN CHANGE) #######
+result_saving_path = './result_pickle_files'
+##########################################################################
 
 mainstage = MainStage([
     WorkloadAndAcceleratorParserStage,
