@@ -1,5 +1,6 @@
 from classes.stages import *
 import numpy as np
+import pickle
 import logging as _logging
 from plot_artifact import plot_Fig12_total_en_and_la_heatmap
 
@@ -16,12 +17,11 @@ result_saving_path = './result_pickle_files'
 df_modes = ((False, False), (True, False), (True, True))
 df_x_tilesizes = (1, 4, 16, 60, 240, 960)
 df_y_tilesizes = (1, 4, 18, 72, 270, 540)
-plotinfo = np.empty((3, 2, 6, 6))  # 3 rows for different overlap-storing modes, 2 columns for energy and latency, and a 6x6 y by x tilesize grid
+plotinfo = np.random.rand(3, 2, 6, 6)  # 3 rows for different overlap-storing modes, 2 columns for energy and latency, and a 6x6 y by x tilesize grid
 
 # fast testing settings:
 # df_x_tilesizes = (1, )
 # df_y_tilesizes = (1, )
-# plotinfo = np.random.rand(3, 2, 6, 6)  # 3 rows for different overlap-storing modes, 2 columns for energy and latency, and a 6x6 y by x tilesize grid
 
 class CS1_Result_Collector_Stage(Stage):
     """
@@ -79,4 +79,6 @@ mainstage = MainStage([
 
 if __name__ == '__main__':
     mainstage.run()
-    plot_Fig12_total_en_and_la_heatmap(plotinfo)
+    with open(f'{result_saving_path}/plotinfo.pickle', 'wb') as f:
+        pickle.dump(plotinfo, f, -1)
+    plot_Fig12_total_en_and_la_heatmap(plotinfo, block=True)

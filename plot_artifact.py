@@ -4,7 +4,7 @@ import matplotlib.colors as colors
 from plot_helper_funcs import heatmap, annotate_heatmap, data_collect
 
 
-def plot_Fig12_total_en_and_la_heatmap(plotinfo):
+def plot_Fig12_total_en_and_la_heatmap(plotinfo, block=True):
     import os
 
     # plotinfo: a numpy array of 3 rows for different overlap-storing modes, 2 columns for energy and latency, and a 6x6 y by x tilesize grid
@@ -68,7 +68,7 @@ def plot_Fig12_total_en_and_la_heatmap(plotinfo):
     if not os.path.isdir('./result_plot'):
         os.makedirs('./result_plot')
     plt.savefig('./result_plot/Fig12.pdf')
-    plt.show()
+    plt.show(block=block)
 
 
 def plot_Fig13_MAC_Op_count(data):
@@ -769,7 +769,11 @@ def plot_Fig10_activation_data_size_visualization(result_saving_path, design_to_
 
 if __name__ == '__main__':
     from main_artifact import result_saving_path
+    import pickle
     data_to_plot = data_collect(result_saving_path)
+    with open(f'{result_saving_path}/plotinfo.pickle', 'rb') as f:
+        plotinfo = pickle.load(f)
+    plot_Fig12_total_en_and_la_heatmap(plotinfo, block=False)
     plot_Fig13_MAC_Op_count(data_to_plot)
     plot_Fig14_a_mem_access_breakdown(data_to_plot)
     plot_Fig14_b_mem_access_breakdown(data_to_plot)
