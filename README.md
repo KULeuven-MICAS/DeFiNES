@@ -69,7 +69,7 @@ figures plotted in this case will be slightly different than
 the original ones in the paper.
 
 #### What results are expected? 
-When the program finishes, an overall energy and latency comparison figure will be plotted for these 108 depth-first scheduling options (Fig. 12), and 108 result pickle files (.pkl) will be saved under the `result_saving_path` defined in the main_artifact.py (by default, it is `.\result_pickle_files\`).
+When the program finishes, an overall energy and latency comparison figure will be plotted for these 108 depth-first scheduling options (Fig. 12), and 108 result pickle files (.pkl) will be saved under the `result_saving_path` defined in the [main_artifact.py](/main_artifact.py#L13) (by default, it is `.\result_pickle_files\`).
 
 
 ### Step 2
@@ -88,7 +88,7 @@ result pickle files and makes the plots.
 #### What results are expected? 
 Multiple detailed analysis figures: Fig. 13, Fig. 14, Fig. 15, Fig. 6(left), Fig. 9 and Fig. 10.
 
-> In the end, all the plots will be saved to `.\result_plot\` in PDF.
+> In the end, all the plots will be saved to `.\result_plot\` as PDF files.
 
 ## Experiment Customization
 The goal of this work is to provide an open-source framework for DNN accelerator architecture-schedule optimization,
