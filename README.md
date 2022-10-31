@@ -56,7 +56,7 @@ processing FSRCNN on Meta-proto-like DF architecture.
 18 hours with the default setting (using 1 CPU thread
 and set `loma_lpf_limit=8`). loma_lpf_limit is
 a speed-quality tradeoff tuning knob. User can change
-its value in main_artifact.py. The larger it is, the
+its value in [main_artifact.py](/main_artifact.py#L70). The larger it is, the
 longer the program runs, and possibly the better the result
 found. For all the experiments in the paper, we set it to
 8 to guarantee the best results can be found.
