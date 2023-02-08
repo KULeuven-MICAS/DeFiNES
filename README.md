@@ -1,4 +1,7 @@
-# DeFiNES: Enabling Fast Exploration of the Depth-first Scheduling Space for DNN Accelerators through Analytical Modeling - HPCA23 Artifact Evaluation
+# DeFiNES: A DSE Framework Enabling Fast Exploration of the Depth-first Scheduling Space for DNN Accelerators
+## Paper:
+[L. Mei, K. Goetschalckx, A. Symons and M. Verhelst, " DeFiNES: Enabling Fast Exploration of the Depth-first Scheduling Space for DNN Accelerators through Analytical Modeling," 2023 IEEE International Symposium on High-Performance Computer Architecture (HPCA), 2023](https://arxiv.org/abs/2212.05344)
+
 
 ## Abstract
 Our artifact provides a guide to replicate the primary
